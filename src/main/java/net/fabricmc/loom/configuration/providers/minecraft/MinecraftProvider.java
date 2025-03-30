@@ -27,10 +27,16 @@ package net.fabricmc.loom.configuration.providers.minecraft;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 import com.google.common.base.Preconditions;
+
+import net.fabricmc.loom.configuration.providers.jar_mods.JarMod;
+
+import net.fabricmc.loom.util.ZipUtils;
+
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Project;
 import org.jetbrains.annotations.Nullable;
@@ -41,6 +47,7 @@ import net.fabricmc.loom.LoomGradleExtension;
 import net.fabricmc.loom.api.mappings.layered.MappingsNamespace;
 import net.fabricmc.loom.configuration.ConfigContext;
 import net.fabricmc.loom.configuration.providers.BundleMetadata;
+import net.fabricmc.loom.configuration.providers.jar_mods.JarModConfiguration;
 import net.fabricmc.loom.util.Constants;
 import net.fabricmc.loom.util.download.DownloadExecutor;
 import net.fabricmc.loom.util.download.GradleDownloadProgressListener;
@@ -50,20 +57,27 @@ public abstract class MinecraftProvider {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MinecraftProvider.class);
 
 	private final MinecraftMetadataProvider metadataProvider;
-
+	private final ConfigContext configContext;
 	private File minecraftClientJar;
 	// Note this will be the boostrap jar starting with 21w39a
 	private File minecraftServerJar;
 	// The extracted server jar from the boostrap, only exists in >=21w39a
 	private File minecraftExtractedServerJar;
+	private File minecraftClientJarPreJarMod;
+	private File minecraftServerJarPreJarMod;
 	@Nullable
 	private BundleMetadata serverBundleMetadata;
-
-	private final ConfigContext configContext;
 
 	public MinecraftProvider(MinecraftMetadataProvider metadataProvider, ConfigContext configContext) {
 		this.metadataProvider = metadataProvider;
 		this.configContext = configContext;
+	}
+
+	public static File minecraftWorkingDirectory(Project project, String version) {
+		LoomGradleExtension extension = LoomGradleExtension.get(project);
+		File workingDir = new File(extension.getFiles().getUserCache(), version);
+		workingDir.mkdirs();
+		return workingDir;
 	}
 
 	protected boolean provideClient() {
@@ -89,6 +103,7 @@ public abstract class MinecraftProvider {
 		}
 
 		downloadJars();
+		addJarMods();
 
 		if (provideServer()) {
 			serverBundleMetadata = BundleMetadata.fromJar(minecraftServerJar.toPath());
@@ -101,23 +116,26 @@ public abstract class MinecraftProvider {
 	protected void initFiles() {
 		if (provideClient()) {
 			minecraftClientJar = file("minecraft-client.jar");
+			minecraftClientJarPreJarMod = file("minecraft-client-pre-jar-mod.jar");
+			System.out.println("Client jar: " + minecraftClientJar.getAbsolutePath());
 		}
 
 		if (provideServer()) {
 			minecraftServerJar = file("minecraft-server.jar");
 			minecraftExtractedServerJar = file("minecraft-extracted_server.jar");
+			minecraftServerJarPreJarMod = file("minecraft-server-pre-jar-mod.jar");
 		}
 	}
 
 	private void downloadJars() throws IOException {
 		try (ProgressGroup progressGroup = new ProgressGroup(getProject(), "Download Minecraft jars");
-				DownloadExecutor executor = new DownloadExecutor(2)) {
+			 DownloadExecutor executor = new DownloadExecutor(2)) {
 			if (provideClient()) {
 				final MinecraftVersionMeta.Download client = getVersionInfo().download("client");
 				getExtension().download(client.url())
 						.sha1(client.sha1())
 						.progress(new GradleDownloadProgressListener("Minecraft client", progressGroup::createProgressLogger))
-						.downloadPathAsync(minecraftClientJar.toPath(), executor);
+						.downloadPathAsync(minecraftClientJarPreJarMod.toPath(), executor);
 			}
 
 			if (provideServer()) {
@@ -125,8 +143,33 @@ public abstract class MinecraftProvider {
 				getExtension().download(server.url())
 						.sha1(server.sha1())
 						.progress(new GradleDownloadProgressListener("Minecraft server", progressGroup::createProgressLogger))
-						.downloadPathAsync(minecraftServerJar.toPath(), executor);
+						.downloadPathAsync(minecraftServerJarPreJarMod.toPath(), executor);
 			}
+		}
+	}
+
+	private void addJarMods() throws IOException {
+		JarModConfiguration cfg = configContext.extension().getJarMods();
+		if(provideClient()) {
+			List<Path> sources = new ArrayList<>();
+			sources.add(minecraftClientJarPreJarMod.toPath());
+			for(JarMod mod : cfg.jarMods) {
+				if(mod.environment().isClient()) {
+					sources.add(mod.jarFile());
+				}
+			}
+			ZipUtils.mergeZips(sources, minecraftClientJar.toPath());
+		}
+
+		if(provideServer()) {
+			List<Path> sources = new ArrayList<>();
+			sources.add(minecraftServerJarPreJarMod.toPath());
+			for(JarMod mod : cfg.jarMods) {
+				if(mod.environment().isServer()) {
+					sources.add(mod.jarFile());
+				}
+			}
+			ZipUtils.mergeZips(sources, minecraftServerJar.toPath());
 		}
 	}
 
@@ -180,7 +223,8 @@ public abstract class MinecraftProvider {
 	}
 
 	public String minecraftVersion() {
-		return Objects.requireNonNull(metadataProvider, "Metadata provider not setup").getMinecraftVersion();
+		JarModConfiguration cfg = configContext.extension().getJarMods();
+		return Objects.requireNonNull(metadataProvider, "Metadata provider not setup").getMinecraftVersion() + cfg.getJarModNameExtension();
 	}
 
 	public MinecraftVersionMeta getVersionInfo() {
@@ -213,12 +257,5 @@ public abstract class MinecraftProvider {
 
 	public boolean refreshDeps() {
 		return getExtension().refreshDeps();
-	}
-
-	public static File minecraftWorkingDirectory(Project project, String version) {
-		LoomGradleExtension extension = LoomGradleExtension.get(project);
-		File workingDir = new File(extension.getFiles().getUserCache(), version);
-		workingDir.mkdirs();
-		return workingDir;
 	}
 }

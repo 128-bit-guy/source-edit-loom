@@ -33,7 +33,7 @@ public final class ModEnvironment {
 
 	private final boolean client;
 	private final boolean server;
-	private final String name;
+	public final String name;
 
 	private ModEnvironment(boolean client, boolean server, String name) {
 		this.client = client;

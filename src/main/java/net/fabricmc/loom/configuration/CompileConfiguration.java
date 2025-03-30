@@ -39,6 +39,8 @@ import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
+import net.fabricmc.loom.configuration.providers.jar_mods.JarModConfiguration;
+
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.logging.Logger;
@@ -155,6 +157,8 @@ public abstract class CompileConfiguration implements Runnable {
 	private synchronized void setupMinecraft(ConfigContext configContext) throws Exception {
 		final Project project = configContext.project();
 		final LoomGradleExtension extension = configContext.extension();
+
+		extension.setJarMods(JarModConfiguration.create(configContext));
 
 		final MinecraftMetadataProvider metadataProvider = MinecraftMetadataProvider.create(configContext);
 		extension.setMetadataProvider(metadataProvider);

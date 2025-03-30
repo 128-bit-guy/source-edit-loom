@@ -28,6 +28,8 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 
+import net.fabricmc.loom.configuration.providers.jar_mods.JarModConfiguration;
+
 import org.gradle.api.Project;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.FileCollection;
@@ -88,6 +90,10 @@ public interface LoomGradleExtension extends LoomGradleExtensionAPI {
 	void setNamedMinecraftProvider(NamedMinecraftProvider<?> namedMinecraftProvider);
 
 	void setIntermediaryMinecraftProvider(IntermediaryMinecraftProvider<?> intermediaryMinecraftProvider);
+
+	JarModConfiguration getJarMods();
+
+	void setJarMods(JarModConfiguration jarMods);
 
 	default List<Path> getMinecraftJars(MappingsNamespace mappingsNamespace) {
 		return switch (mappingsNamespace) {

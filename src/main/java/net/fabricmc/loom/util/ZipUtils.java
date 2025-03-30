@@ -30,11 +30,15 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,6 +47,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -285,5 +290,44 @@ public class ZipUtils {
 		}
 
 		return map;
+	}
+
+	public static void mergeZips(Collection<Path> sources, Path target) throws IOException {
+		try (FileSystemUtil.Delegate dest = FileSystemUtil.getJarFileSystem(target, true)) {
+			Path destRoot = dest.getPath("/");
+			for (Path source : sources) {
+				try (FileSystemUtil.Delegate src = FileSystemUtil.getJarFileSystem(source, false)) {
+					Path srcRoot = src.getPath("/");
+					Files.walkFileTree(srcRoot, new FileVisitor<Path>() {
+						@Override
+						public @NotNull FileVisitResult preVisitDirectory(Path dir, @NotNull BasicFileAttributes attrs) throws IOException {
+							Path resPath = destRoot.resolve(src.getPath("/").relativize(dir));
+							Files.createDirectories(resPath);
+							return FileVisitResult.CONTINUE;
+						}
+
+						@Override
+						public @NotNull FileVisitResult visitFile(Path file, @NotNull BasicFileAttributes attrs) throws IOException {
+							Path resPath = destRoot.resolve(src.getPath("/").relativize(file));
+							System.out.println("In file: " + file.toString());
+							System.out.println("Out file: " + resPath.toString());
+							byte[] b = Files.readAllBytes(file);
+							Files.write(resPath, b, StandardOpenOption.CREATE);
+							return FileVisitResult.CONTINUE;
+						}
+
+						@Override
+						public @NotNull FileVisitResult visitFileFailed(Path file, @NotNull IOException exc) throws IOException {
+							return FileVisitResult.CONTINUE;
+						}
+
+						@Override
+						public @NotNull FileVisitResult postVisitDirectory(Path dir, @Nullable IOException exc) throws IOException {
+							return FileVisitResult.CONTINUE;
+						}
+					});
+				}
+			}
+		}
 	}
 }

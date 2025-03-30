@@ -91,6 +91,13 @@ public class Constants {
 		 */
 		public static final String PRODUCTION_RUNTIME_MODS = "productionRuntimeMods";
 
+		/**
+		 * Mods to be inserted into minecraft jar before remapping, e.g., modloader, forge, optifine
+		 */
+		public static final String MINECRAFT_JAR_MODS = "minecraftJarMods";
+		public static final String MINECRAFT_CLIENT_JAR_MODS = "minecraftClientJarMods";
+		public static final String MINECRAFT_SERVER_JAR_MODS = "minecraftServerJarMods";
+
 		private Configurations() {
 		}
 	}

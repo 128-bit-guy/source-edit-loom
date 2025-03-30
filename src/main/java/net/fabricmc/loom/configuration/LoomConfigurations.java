@@ -160,6 +160,10 @@ public abstract class LoomConfigurations implements Runnable {
 		extendsFrom(Constants.Configurations.MINECRAFT_TEST_CLIENT_RUNTIME_LIBRARIES, Constants.Configurations.LOADER_DEPENDENCIES);
 
 		register(Constants.Configurations.PRODUCTION_RUNTIME_MODS, Role.RESOLVABLE);
+
+		register(Constants.Configurations.MINECRAFT_JAR_MODS, Role.RESOLVABLE);
+		register(Constants.Configurations.MINECRAFT_CLIENT_JAR_MODS, Role.RESOLVABLE);
+		register(Constants.Configurations.MINECRAFT_SERVER_JAR_MODS, Role.RESOLVABLE);
 	}
 
 	private NamedDomainObjectProvider<Configuration> register(String name, Role role) {

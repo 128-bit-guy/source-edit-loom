@@ -142,6 +142,10 @@ public class MinecraftClassMerger {
 
 		ClassNode nodeOut = new ClassNode(Constants.ASM_VERSION);
 		nodeOut.version = nodeC.version;
+		if((nodeOut.version & ((1 << 16) - 1)) < 52) {
+			nodeOut.version &= ~((1 << 16) - 1);
+			nodeOut.version |= 52;
+		}
 		nodeOut.access = nodeC.access;
 		nodeOut.name = nodeC.name;
 		nodeOut.signature = nodeC.signature;

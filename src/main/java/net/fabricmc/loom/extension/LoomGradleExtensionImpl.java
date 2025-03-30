@@ -34,6 +34,8 @@ import java.util.Objects;
 
 import javax.inject.Inject;
 
+import net.fabricmc.loom.configuration.providers.jar_mods.JarModConfiguration;
+
 import org.gradle.api.Project;
 import org.gradle.api.configuration.BuildFeatures;
 import org.gradle.api.file.ConfigurableFileCollection;
@@ -77,6 +79,7 @@ public abstract class LoomGradleExtensionImpl extends LoomGradleExtensionApiImpl
 	private final ListProperty<LibraryProcessorManager.LibraryProcessorFactory> libraryProcessorFactories;
 	private final boolean configurationCacheActive;
 	private final boolean isolatedProjectsActive;
+	private JarModConfiguration jarMods;
 
 	@Inject
 	protected abstract BuildFeatures getBuildFeatures();
@@ -305,5 +308,15 @@ public abstract class LoomGradleExtensionImpl extends LoomGradleExtensionApiImpl
 	@Override
 	public boolean isProjectIsolationActive() {
 		return isolatedProjectsActive;
+	}
+
+	@Override
+	public JarModConfiguration getJarMods() {
+		return jarMods;
+	}
+
+	@Override
+	public void setJarMods(JarModConfiguration jarMods) {
+		this.jarMods = jarMods;
 	}
 }

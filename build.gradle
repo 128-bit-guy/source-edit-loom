@@ -140,6 +140,8 @@ dependencies {
 		transitive = false
 	}
 
+	implementation 'commons-codec:commons-codec:1.18.0'
+
 	// Kapt integration
 	compileOnly libs.kotlin.gradle.plugin
 
