@@ -49,7 +49,7 @@ public interface MappingContext {
 	MinecraftProvider minecraftProvider();
 
 	default String minecraftVersion() {
-		return minecraftProvider().minecraftVersion();
+		return minecraftProvider().minecraftJarModVersion();
 	}
 
 	/**

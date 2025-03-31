@@ -113,4 +113,6 @@ public interface LayeredMappingSpecBuilder {
 	 */
 	@ApiStatus.Experimental
 	LayeredMappingSpecBuilder mappings(Object file, Action<? super FileMappingsSpecBuilder> action);
+
+	LayeredMappingSpecBuilder moveDefaultPackage(String newPackage);
 }

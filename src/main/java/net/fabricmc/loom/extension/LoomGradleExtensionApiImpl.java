@@ -461,7 +461,7 @@ public abstract class LoomGradleExtensionApiImpl implements LoomGradleExtensionA
 
 	@Override
 	public Provider<String> getMinecraftVersion() {
-		return getProject().provider(() -> LoomGradleExtension.get(getProject()).getMinecraftProvider().minecraftVersion());
+		return getProject().provider(() -> LoomGradleExtension.get(getProject()).getMinecraftProvider().minecraftJarModVersion());
 	}
 
 	@Override

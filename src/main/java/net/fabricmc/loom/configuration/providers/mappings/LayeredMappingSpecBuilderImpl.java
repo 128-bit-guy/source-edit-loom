@@ -28,6 +28,8 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import net.fabricmc.loom.configuration.providers.mappings.default_package.DefaultPackageSpec;
+
 import org.gradle.api.Action;
 
 import net.fabricmc.loom.api.mappings.layered.spec.FileMappingsSpecBuilder;
@@ -75,6 +77,11 @@ public class LayeredMappingSpecBuilderImpl implements LayeredMappingSpecBuilder 
 		FileMappingsSpecBuilderImpl builder = FileMappingsSpecBuilderImpl.builder(FileSpec.create(file));
 		action.execute(builder);
 		return addLayer(builder.build());
+	}
+
+	@Override
+	public LayeredMappingSpecBuilder moveDefaultPackage(String newPackage) {
+		return addLayer(new DefaultPackageSpec(newPackage));
 	}
 
 	public LayeredMappingSpec build() {

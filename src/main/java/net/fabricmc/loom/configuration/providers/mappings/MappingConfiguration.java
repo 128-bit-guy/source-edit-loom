@@ -97,12 +97,12 @@ public class MappingConfiguration {
 
 		final TinyJarInfo jarInfo = TinyJarInfo.get(inputJar);
 		jarInfo.minecraftVersionId().ifPresent(id -> {
-			if (!minecraftProvider.minecraftVersion().equals(id)) {
-				LOGGER.warn("The mappings (%s) were not built for Minecraft version %s, proceed with caution.".formatted(dependency.getDepString(), minecraftProvider.minecraftVersion()));
+			if (!minecraftProvider.minecraftJarModVersion().equals(id)) {
+				LOGGER.warn("The mappings (%s) were not built for Minecraft version %s, proceed with caution.".formatted(dependency.getDepString(), minecraftProvider.minecraftJarModVersion()));
 			}
 		});
 
-		final String mappingsIdentifier = createMappingsIdentifier(mappingsName, version, getMappingsClassifier(dependency, jarInfo.v2()), minecraftProvider.minecraftVersion());
+		final String mappingsIdentifier = createMappingsIdentifier(mappingsName, version, getMappingsClassifier(dependency, jarInfo.v2()), minecraftProvider.minecraftJarModVersion());
 		final Path workingDir = minecraftProvider.dir(mappingsIdentifier).toPath();
 
 		var mappingProvider = new MappingConfiguration(mappingsIdentifier, workingDir);

@@ -98,7 +98,7 @@ public abstract class MinecraftProvider {
 			final JavaVersion requiredJavaVersion = JavaVersion.toVersion(requiredMajorJavaVersion);
 
 			if (!JavaVersion.current().isCompatibleWith(requiredJavaVersion)) {
-				throw new IllegalStateException("Minecraft " + minecraftVersion() + " requires Java " + requiredJavaVersion + " but Gradle is using " + JavaVersion.current());
+				throw new IllegalStateException("Minecraft " + minecraftJarModVersion() + " requires Java " + requiredJavaVersion + " but Gradle is using " + JavaVersion.current());
 			}
 		}
 
@@ -187,7 +187,7 @@ public abstract class MinecraftProvider {
 	}
 
 	public File workingDir() {
-		return minecraftWorkingDirectory(configContext.project(), minecraftVersion());
+		return minecraftWorkingDirectory(configContext.project(), minecraftJarModVersion());
 	}
 
 	public File dir(String path) {
@@ -222,9 +222,13 @@ public abstract class MinecraftProvider {
 		return minecraftServerJar;
 	}
 
-	public String minecraftVersion() {
+	public String minecraftJarModVersion() {
 		JarModConfiguration cfg = configContext.extension().getJarMods();
 		return Objects.requireNonNull(metadataProvider, "Metadata provider not setup").getMinecraftVersion() + cfg.getJarModNameExtension();
+	}
+
+	public String minecraftVersion() {
+		return Objects.requireNonNull(metadataProvider, "Metadata provider not setup").getMinecraftVersion();
 	}
 
 	public MinecraftVersionMeta getVersionInfo() {

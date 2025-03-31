@@ -98,7 +98,7 @@ public abstract class GenerateDLIConfigTask extends AbstractLoomTask {
 
 	public GenerateDLIConfigTask() {
 		getVersionInfoJson().set(LoomGradlePlugin.GSON.toJson(getExtension().getMinecraftProvider().getVersionInfo()));
-		getMinecraftVersion().set(getExtension().getMinecraftProvider().minecraftVersion());
+		getMinecraftVersion().set(getExtension().getMinecraftProvider().minecraftJarModVersion());
 		getSplitSourceSets().set(getExtension().areEnvironmentSourceSetsSplit());
 		getANSISupportedIDE().set(ansiSupportedIde(getProject()));
 		getPlainConsole().set(getProject().getGradle().getStartParameter().getConsoleOutput() == ConsoleOutput.Plain);
