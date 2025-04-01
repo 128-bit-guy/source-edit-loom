@@ -115,7 +115,9 @@ public abstract class AbstractMappedMinecraftProvider<M extends MinecraftProvide
 
 			if (!dependencyTargets.isEmpty()) {
 				MinecraftSourceSets.get(getProject()).applyDependencies(
-						(configuration, type) -> getProject().getDependencies().add(configuration, getDependencyNotation(type)),
+						(configuration, type) -> {
+							getProject().getDependencies().add(configuration, getDependencyNotation(type));
+						},
 						dependencyTargets
 				);
 			}
@@ -248,6 +250,7 @@ public abstract class AbstractMappedMinecraftProvider<M extends MinecraftProvide
 
 		TinyRemapper remapper = TinyRemapperHelper.getTinyRemapper(getProject(), configContext.serviceFactory(), fromM, toM, fixRecords, (builder) -> {
 			builder.extraPostApplyVisitor(new SignatureFixerApplyVisitor(remappedSignatures));
+			builder.fixPackageAccess(true);
 			configureRemapper(remappedJars, builder);
 		});
 
