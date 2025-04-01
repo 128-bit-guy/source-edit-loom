@@ -28,11 +28,11 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.jetbrains.java.decompiler.main.Fernflower;
-import org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences;
-import org.jetbrains.java.decompiler.main.extern.IResultSaver;
+import org.jetbrains.java.vineflower.main.Fernflower;
+import org.jetbrains.java.vineflower.main.extern.IFernflowerPreferences;
+import org.jetbrains.java.vineflower.main.extern.IResultSaver;
 
-import net.fabricmc.fernflower.api.IFabricJavadocProvider;
+import net.fabricmc.fernflower.vf_api.IFabricJavadocProvider;
 import net.fabricmc.loom.decompilers.LoomInternalDecompiler;
 
 public final class VineflowerDecompiler implements LoomInternalDecompiler {

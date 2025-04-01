@@ -42,8 +42,8 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import org.jetbrains.java.decompiler.main.DecompilerContext;
-import org.jetbrains.java.decompiler.main.extern.IResultSaver;
+import org.jetbrains.java.vineflower.main.DecompilerContext;
+import org.jetbrains.java.vineflower.main.extern.IResultSaver;
 
 public class ThreadSafeResultSaver implements IResultSaver {
 	private final Supplier<File> output;

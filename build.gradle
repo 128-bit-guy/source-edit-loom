@@ -120,7 +120,8 @@ dependencies {
 	cfrCompileOnly runtimeLibs.cfr
 	cfrCompileOnly libs.fabric.mapping.io
 
-	vineflowerCompileOnly runtimeLibs.vineflower
+//	vineflowerCompileOnly runtimeLibs.vineflower
+	vineflowerCompileOnly runtimeLibs.jetbrains.annotations
 	vineflowerCompileOnly libs.fabric.mapping.io
 
 	fernflowerApi sourceSets.commonDecompiler.output

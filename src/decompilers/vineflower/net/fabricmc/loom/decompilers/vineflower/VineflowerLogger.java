@@ -26,7 +26,7 @@ package net.fabricmc.loom.decompilers.vineflower;
 
 import java.io.IOException;
 
-import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger;
+import org.jetbrains.java.vineflower.main.extern.IFernflowerLogger;
 
 import net.fabricmc.loom.decompilers.LoomInternalDecompiler;
 

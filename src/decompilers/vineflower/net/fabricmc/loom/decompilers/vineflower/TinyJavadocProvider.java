@@ -31,12 +31,12 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jetbrains.java.decompiler.struct.StructClass;
-import org.jetbrains.java.decompiler.struct.StructField;
-import org.jetbrains.java.decompiler.struct.StructMethod;
-import org.jetbrains.java.decompiler.struct.StructRecordComponent;
+import org.jetbrains.java.vineflower.struct.StructClass;
+import org.jetbrains.java.vineflower.struct.StructField;
+import org.jetbrains.java.vineflower.struct.StructMethod;
+import org.jetbrains.java.vineflower.struct.StructRecordComponent;
 
-import net.fabricmc.fernflower.api.IFabricJavadocProvider;
+import net.fabricmc.fernflower.vf_api.IFabricJavadocProvider;
 import net.fabricmc.mappingio.MappingReader;
 import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch;
 import net.fabricmc.mappingio.tree.MappingTree;
