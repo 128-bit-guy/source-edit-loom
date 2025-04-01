@@ -194,7 +194,7 @@ public abstract class CompileConfiguration implements Runnable {
 			namedMinecraftProvider = jarConfiguration.createProcessedNamedMinecraftProvider(namedMinecraftProvider, minecraftJarProcessorManager);
 		}
 
-		final var provideContext = new AbstractMappedMinecraftProvider.ProvideContext(true, extension.refreshDeps(), configContext);
+		final var provideContext = new AbstractMappedMinecraftProvider.ProvideContext(false, extension.refreshDeps(), configContext);
 
 		extension.setIntermediaryMinecraftProvider(intermediaryMinecraftProvider);
 		intermediaryMinecraftProvider.provide(provideContext);

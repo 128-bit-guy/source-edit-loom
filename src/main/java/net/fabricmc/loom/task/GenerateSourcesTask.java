@@ -50,9 +50,13 @@ import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
+import net.fabricmc.loom.util.PathUtils;
+
+import org.apache.commons.io.FileUtils;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.RegularFileProperty;
+import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.provider.Property;
 import org.gradle.api.services.ServiceReference;
 import org.gradle.api.tasks.Input;
@@ -62,6 +66,7 @@ import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.UntrackedTask;
 import org.gradle.api.tasks.options.Option;
@@ -108,6 +113,112 @@ import net.fabricmc.mappingio.tree.MemoryMappingTree;
 public abstract class GenerateSourcesTask extends AbstractLoomTask {
 	private static final String CACHE_VERSION = "v1";
 	private final DecompilerOptions decompilerOptions;
+
+	@Inject
+	public GenerateSourcesTask(DecompilerOptions decompilerOptions) {
+		this.decompilerOptions = decompilerOptions;
+
+		getClassesInputJar().setFrom(getInputJarName().map(minecraftJarName -> {
+			final List<MinecraftJar> minecraftJars = getExtension().getNamedMinecraftProvider().getMinecraftJars();
+
+			for (MinecraftJar minecraftJar : minecraftJars) {
+				if (minecraftJar.getName().equals(minecraftJarName)) {
+					final Path backupJarPath = AbstractMappedMinecraftProvider.getBackupJarPath(minecraftJar);
+
+					if (Files.notExists(backupJarPath)) {
+						throw new IllegalStateException("Input minecraft jar not found at: " + backupJarPath);
+					}
+
+					return backupJarPath.toFile();
+				}
+			}
+
+			throw new IllegalStateException("Input minecraft jar not found: " + getInputJarName().get());
+		}));
+		getClassesOutputJar().setFrom(getInputJarName().map(minecraftJarName -> {
+			final List<MinecraftJar> minecraftJars = getExtension().getNamedMinecraftProvider().getMinecraftJars();
+
+			for (MinecraftJar minecraftJar : minecraftJars) {
+				if (minecraftJar.getName().equals(minecraftJarName)) {
+					return minecraftJar.toFile();
+				}
+			}
+
+			throw new IllegalStateException("Input minecraft jar not found: " + getInputJarName().get());
+		}));
+
+		getClasspath().from(decompilerOptions.getClasspath()).finalizeValueOnRead();
+		dependsOn(decompilerOptions.getClasspath().getBuiltBy());
+
+		getMinecraftCompileLibraries().from(getProject().getConfigurations().getByName(Constants.Configurations.MINECRAFT_COMPILE_LIBRARIES));
+		getDecompileCacheFile().set(getExtension().getFiles().getDecompileCache(CACHE_VERSION));
+		getUnpickRuntimeClasspath().from(getProject().getConfigurations().getByName(Constants.Configurations.UNPICK_CLASSPATH));
+		getUnpickLogConfig().set(getExtension().getFiles().getUnpickLoggingConfigFile());
+
+		getUseCache().convention(false);
+		getResetCache().convention(getExtension().refreshDeps());
+
+		getMappings().set(SourceMappingsService.create(getProject()));
+
+		getMaxCachedFiles().set(GradleUtils.getIntegerPropertyProvider(getProject(), Constants.Properties.DECOMPILE_CACHE_MAX_FILES).orElse(50_000));
+		getMaxCacheFileAge().set(GradleUtils.getIntegerPropertyProvider(getProject(), Constants.Properties.DECOMPILE_CACHE_MAX_AGE).orElse(90));
+
+		getDaemonUtilsContext().set(getProject().getObjects().newInstance(DaemonUtils.Context.class, getProject()));
+
+		mustRunAfter(getProject().getTasks().withType(AbstractRemapJarTask.class));
+	}
+
+	public static File getJarFileWithSuffix(String suffix, Path runtimeJar) {
+		final String path = runtimeJar.toFile().getAbsolutePath();
+
+		if (!path.toLowerCase(Locale.ROOT).endsWith(".jar")) {
+			throw new RuntimeException("Invalid mapped JAR path: " + path);
+		}
+
+		return new File(path.substring(0, path.length() - 4) + suffix);
+	}
+
+	@Nullable
+	private static ClassLineNumbers readLineNumbers(Path linemapFile) throws IOException {
+		if (Files.notExists(linemapFile)) {
+			return null;
+		}
+
+		try (BufferedReader reader = Files.newBufferedReader(linemapFile, StandardCharsets.UTF_8)) {
+			return ClassLineNumbers.readMappings(reader);
+		}
+	}
+
+	private static Constructor<LoomDecompiler> getDecompilerConstructor(String clazz) {
+		try {
+			//noinspection unchecked
+			return (Constructor<LoomDecompiler>) Class.forName(clazz).getConstructor();
+		} catch (NoSuchMethodException e) {
+			return null;
+		} catch (ClassNotFoundException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private static String fileHash(File file) {
+		try {
+			return Checksum.sha256Hex(Files.readAllBytes(file.toPath()));
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
+	private static String fileCollectionHash(FileCollection files) {
+		var sj = new StringJoiner(",");
+
+		files.getFiles()
+				.stream()
+				.sorted(Comparator.comparing(File::getAbsolutePath))
+				.map(GenerateSourcesTask::fileHash)
+				.forEach(sj::add);
+
+		return sj.toString();
+	}
 
 	/**
 	 * The jar name to decompile, {@link MinecraftJar#getName()}.
@@ -204,60 +315,6 @@ public abstract class GenerateSourcesTask extends AbstractLoomTask {
 	@ServiceReference(SyncTaskBuildService.NAME)
 	abstract Property<SyncTaskBuildService> getSyncTask();
 
-	@Inject
-	public GenerateSourcesTask(DecompilerOptions decompilerOptions) {
-		this.decompilerOptions = decompilerOptions;
-
-		getClassesInputJar().setFrom(getInputJarName().map(minecraftJarName -> {
-			final List<MinecraftJar> minecraftJars = getExtension().getNamedMinecraftProvider().getMinecraftJars();
-
-			for (MinecraftJar minecraftJar : minecraftJars) {
-				if (minecraftJar.getName().equals(minecraftJarName)) {
-					final Path backupJarPath = AbstractMappedMinecraftProvider.getBackupJarPath(minecraftJar);
-
-					if (Files.notExists(backupJarPath)) {
-						throw new IllegalStateException("Input minecraft jar not found at: " + backupJarPath);
-					}
-
-					return backupJarPath.toFile();
-				}
-			}
-
-			throw new IllegalStateException("Input minecraft jar not found: " + getInputJarName().get());
-		}));
-		getClassesOutputJar().setFrom(getInputJarName().map(minecraftJarName -> {
-			final List<MinecraftJar> minecraftJars = getExtension().getNamedMinecraftProvider().getMinecraftJars();
-
-			for (MinecraftJar minecraftJar : minecraftJars) {
-				if (minecraftJar.getName().equals(minecraftJarName)) {
-					return minecraftJar.toFile();
-				}
-			}
-
-			throw new IllegalStateException("Input minecraft jar not found: " + getInputJarName().get());
-		}));
-
-		getClasspath().from(decompilerOptions.getClasspath()).finalizeValueOnRead();
-		dependsOn(decompilerOptions.getClasspath().getBuiltBy());
-
-		getMinecraftCompileLibraries().from(getProject().getConfigurations().getByName(Constants.Configurations.MINECRAFT_COMPILE_LIBRARIES));
-		getDecompileCacheFile().set(getExtension().getFiles().getDecompileCache(CACHE_VERSION));
-		getUnpickRuntimeClasspath().from(getProject().getConfigurations().getByName(Constants.Configurations.UNPICK_CLASSPATH));
-		getUnpickLogConfig().set(getExtension().getFiles().getUnpickLoggingConfigFile());
-
-		getUseCache().convention(true);
-		getResetCache().convention(getExtension().refreshDeps());
-
-		getMappings().set(SourceMappingsService.create(getProject()));
-
-		getMaxCachedFiles().set(GradleUtils.getIntegerPropertyProvider(getProject(), Constants.Properties.DECOMPILE_CACHE_MAX_FILES).orElse(50_000));
-		getMaxCacheFileAge().set(GradleUtils.getIntegerPropertyProvider(getProject(), Constants.Properties.DECOMPILE_CACHE_MAX_AGE).orElse(90));
-
-		getDaemonUtilsContext().set(getProject().getObjects().newInstance(DaemonUtils.Context.class, getProject()));
-
-		mustRunAfter(getProject().getTasks().withType(AbstractRemapJarTask.class));
-	}
-
 	@TaskAction
 	public void run() throws IOException {
 		final Platform platform = Platform.CURRENT;
@@ -271,6 +328,7 @@ public abstract class GenerateSourcesTask extends AbstractLoomTask {
 
 			try (var timer = new Timer("Decompiled sources")) {
 				runWithoutCache();
+				copyEverythingToSourceSets();
 			} catch (Exception e) {
 				ExceptionUtil.processException(e, getDaemonUtilsContext().get());
 				throw ExceptionUtil.createDescriptiveWrapper(RuntimeException::new, "Failed to decompile", e);
@@ -303,10 +361,41 @@ public abstract class GenerateSourcesTask extends AbstractLoomTask {
 
 			try (FileSystemUtil.Delegate fs = FileSystemUtil.getJarFileSystem(cacheFile, true)) {
 				runWithCache(fs.getRoot());
+				copyEverythingToSourceSets();
 			}
 		} catch (Exception e) {
 			ExceptionUtil.processException(e, getDaemonUtilsContext().get());
 			throw ExceptionUtil.createDescriptiveWrapper(RuntimeException::new, "Failed to decompile", e);
+		}
+	}
+
+	private void copyEverythingToSourceSets() throws IOException {
+		final Path sourcesOutputJar = getSourcesOutputJar().get().getAsFile().toPath();
+		final Path classesInputJar = getClassesInputJar().getSingleFile().toPath();
+		Path sources = getProject().getExtensions().getByType(JavaPluginExtension.class)
+				.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getJava().getSrcDirs()
+				.stream().findAny().get().toPath();
+		Path resources = getProject().getExtensions().getByType(JavaPluginExtension.class)
+				.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getResources().getSrcDirs()
+				.stream().findAny().get().toPath();
+		System.out.println("Using source directory: " + sources);
+		System.out.println("Using resource directory: " + resources);
+		FileUtils.cleanDirectory(sources.toFile());
+		FileUtils.cleanDirectory(resources.toFile());
+		try (FileSystemUtil.Delegate dest = FileSystemUtil.getJarFileSystem(sourcesOutputJar, true)) {
+			Path srcRoot = dest.getPath("/");
+			PathUtils.copyContents(srcRoot, sources);
+		}
+		try (FileSystemUtil.Delegate dest = FileSystemUtil.getJarFileSystem(classesInputJar, true)) {
+			Path srcRoot = dest.getPath("/");
+			PathUtils.copyContents(srcRoot, resources, f -> {
+				if(Files.isDirectory(f)) {
+					return false;
+				}
+
+				return !f.toString().endsWith(".class");
+//				return false;
+			});
 		}
 	}
 
@@ -476,7 +565,7 @@ public abstract class GenerateSourcesTask extends AbstractLoomTask {
 		Files.deleteIfExists(ipcPath);
 
 		try (ThreadedProgressLoggerConsumer loggerConsumer = new ThreadedProgressLoggerConsumer(getLogger(), getProgressLoggerFactory(), decompilerOptions.getName(), "Decompiling minecraft sources");
-				IPCServer logReceiver = new IPCServer(ipcPath, loggerConsumer)) {
+			 IPCServer logReceiver = new IPCServer(ipcPath, loggerConsumer)) {
 			doWork(logReceiver, inputJar, outputJar, lineMapFile, existingJar);
 		} catch (InterruptedException e) {
 			throw new RuntimeException("Failed to shutdown log receiver", e);
@@ -612,13 +701,20 @@ public abstract class GenerateSourcesTask extends AbstractLoomTask {
 		Property<DecompilerOptions.Dto> getDecompilerOptions();
 
 		RegularFileProperty getInputJar();
+
 		RegularFileProperty getOutputJar();
+
 		RegularFileProperty getLinemapFile();
+
 		Property<SourceMappingsService.Options> getMappings();
 
 		RegularFileProperty getIPCPath();
 
 		ConfigurableFileCollection getClassPath();
+	}
+
+	public interface MappingsProcessor {
+		boolean transform(MemoryMappingTree mappings);
 	}
 
 	public abstract static class DecompileAction implements WorkAction<DecompileParams> {
@@ -690,62 +786,6 @@ public abstract class GenerateSourcesTask extends AbstractLoomTask {
 		private Collection<Path> getLibraries() {
 			return getParameters().getClassPath().getFiles().stream().map(File::toPath).collect(Collectors.toSet());
 		}
-	}
-
-	public static File getJarFileWithSuffix(String suffix, Path runtimeJar) {
-		final String path = runtimeJar.toFile().getAbsolutePath();
-
-		if (!path.toLowerCase(Locale.ROOT).endsWith(".jar")) {
-			throw new RuntimeException("Invalid mapped JAR path: " + path);
-		}
-
-		return new File(path.substring(0, path.length() - 4) + suffix);
-	}
-
-	@Nullable
-	private static ClassLineNumbers readLineNumbers(Path linemapFile) throws IOException {
-		if (Files.notExists(linemapFile)) {
-			return null;
-		}
-
-		try (BufferedReader reader = Files.newBufferedReader(linemapFile, StandardCharsets.UTF_8)) {
-			return ClassLineNumbers.readMappings(reader);
-		}
-	}
-
-	private static Constructor<LoomDecompiler> getDecompilerConstructor(String clazz) {
-		try {
-			//noinspection unchecked
-			return (Constructor<LoomDecompiler>) Class.forName(clazz).getConstructor();
-		} catch (NoSuchMethodException e) {
-			return null;
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	private static String fileHash(File file) {
-		try {
-			return Checksum.sha256Hex(Files.readAllBytes(file.toPath()));
-		} catch (IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
-
-	private static String fileCollectionHash(FileCollection files) {
-		var sj = new StringJoiner(",");
-
-		files.getFiles()
-				.stream()
-				.sorted(Comparator.comparing(File::getAbsolutePath))
-				.map(GenerateSourcesTask::fileHash)
-				.forEach(sj::add);
-
-		return sj.toString();
-	}
-
-	public interface MappingsProcessor {
-		boolean transform(MemoryMappingTree mappings);
 	}
 
 	private final class Timer implements AutoCloseable {
