@@ -32,11 +32,7 @@ import java.util.List;
 import java.util.Objects;
 
 import com.google.common.base.Preconditions;
-
-import net.fabricmc.loom.configuration.providers.jar_mods.JarMod;
-
-import net.fabricmc.loom.util.ZipUtils;
-
+import net.fabricmc.loom.configuration.providers.minecraft.pre_process.MinecraftPreProcessor;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Project;
 import org.jetbrains.annotations.Nullable;
@@ -47,8 +43,10 @@ import net.fabricmc.loom.LoomGradleExtension;
 import net.fabricmc.loom.api.mappings.layered.MappingsNamespace;
 import net.fabricmc.loom.configuration.ConfigContext;
 import net.fabricmc.loom.configuration.providers.BundleMetadata;
+import net.fabricmc.loom.configuration.providers.jar_mods.JarMod;
 import net.fabricmc.loom.configuration.providers.jar_mods.JarModConfiguration;
 import net.fabricmc.loom.util.Constants;
+import net.fabricmc.loom.util.ZipUtils;
 import net.fabricmc.loom.util.download.DownloadExecutor;
 import net.fabricmc.loom.util.download.GradleDownloadProgressListener;
 import net.fabricmc.loom.util.gradle.ProgressGroup;
@@ -65,6 +63,8 @@ public abstract class MinecraftProvider {
 	private File minecraftExtractedServerJar;
 	private File minecraftClientJarPreJarMod;
 	private File minecraftServerJarPreJarMod;
+	private File minecraftClientJarNotPreProcessed;
+	private File minecraftServerJarNotPreProcessed;
 	@Nullable
 	private BundleMetadata serverBundleMetadata;
 
@@ -102,21 +102,23 @@ public abstract class MinecraftProvider {
 			}
 		}
 
+		final MinecraftLibraryProvider libraryProvider = new MinecraftLibraryProvider(this, configContext.project());
+		libraryProvider.provide();
+
 		downloadJars();
 		addJarMods();
+		preProcessJars();
 
 		if (provideServer()) {
 			serverBundleMetadata = BundleMetadata.fromJar(minecraftServerJar.toPath());
 		}
-
-		final MinecraftLibraryProvider libraryProvider = new MinecraftLibraryProvider(this, configContext.project());
-		libraryProvider.provide();
 	}
 
 	protected void initFiles() {
 		if (provideClient()) {
 			minecraftClientJar = file("minecraft-client.jar");
 			minecraftClientJarPreJarMod = file("minecraft-client-pre-jar-mod.jar");
+			minecraftClientJarNotPreProcessed = file("minecraft-client-not-pre-processed.jar");
 			System.out.println("Client jar: " + minecraftClientJar.getAbsolutePath());
 		}
 
@@ -124,6 +126,7 @@ public abstract class MinecraftProvider {
 			minecraftServerJar = file("minecraft-server.jar");
 			minecraftExtractedServerJar = file("minecraft-extracted_server.jar");
 			minecraftServerJarPreJarMod = file("minecraft-server-pre-jar-mod.jar");
+			minecraftServerJarNotPreProcessed = file("minecraft-server-not-pre-processed.jar");
 		}
 	}
 
@@ -150,26 +153,45 @@ public abstract class MinecraftProvider {
 
 	private void addJarMods() throws IOException {
 		JarModConfiguration cfg = configContext.extension().getJarMods();
-		if(provideClient()) {
+		if (provideClient()) {
 			List<Path> sources = new ArrayList<>();
 			sources.add(minecraftClientJarPreJarMod.toPath());
-			for(JarMod mod : cfg.jarMods) {
-				if(mod.environment().isClient()) {
+			for (JarMod mod : cfg.jarMods) {
+				if (mod.environment().isClient()) {
 					sources.add(mod.jarFile());
 				}
 			}
-			ZipUtils.mergeZips(sources, minecraftClientJar.toPath());
+			ZipUtils.mergeZips(sources, minecraftClientJarNotPreProcessed.toPath());
 		}
 
-		if(provideServer()) {
+		if (provideServer()) {
 			List<Path> sources = new ArrayList<>();
 			sources.add(minecraftServerJarPreJarMod.toPath());
-			for(JarMod mod : cfg.jarMods) {
-				if(mod.environment().isServer()) {
+			for (JarMod mod : cfg.jarMods) {
+				if (mod.environment().isServer()) {
 					sources.add(mod.jarFile());
 				}
 			}
-			ZipUtils.mergeZips(sources, minecraftServerJar.toPath());
+			ZipUtils.mergeZips(sources, minecraftServerJarNotPreProcessed.toPath());
+		}
+	}
+
+	private void preProcessJars() throws IOException {
+		if (provideClient()) {
+			new MinecraftPreProcessor(
+					configContext,
+					minecraftClientJarNotPreProcessed.toPath(),
+					minecraftClientJar.toPath().toAbsolutePath(),
+					Constants.Configurations.MINECRAFT_CLIENT_COMPILE_LIBRARIES
+			).process();
+		}
+		if (provideServer()) {
+			new MinecraftPreProcessor(
+					configContext,
+					minecraftServerJarNotPreProcessed.toPath(),
+					minecraftServerJar.toPath(),
+					Constants.Configurations.MINECRAFT_SERVER_RUNTIME_LIBRARIES
+			).process();
 		}
 	}
 

@@ -133,6 +133,7 @@ public class MinecraftLibraryProvider {
 	}
 
 	private void applyClientLibrary(Library library) {
+		System.out.println("Applying client library: " + library + " for target " + library.target());
 		switch (library.target()) {
 		case COMPILE -> addLibrary(Constants.Configurations.MINECRAFT_CLIENT_COMPILE_LIBRARIES, library);
 		case RUNTIME -> addLibrary(Constants.Configurations.MINECRAFT_CLIENT_RUNTIME_LIBRARIES, library);
@@ -142,6 +143,7 @@ public class MinecraftLibraryProvider {
 	}
 
 	private void applyServerLibrary(Library library) {
+		System.out.println("Applying server library: " + library + " for target " + library.target());
 		switch (library.target()) {
 		case COMPILE -> addLibrary(Constants.Configurations.MINECRAFT_SERVER_COMPILE_LIBRARIES, library);
 		case RUNTIME -> addLibrary(Constants.Configurations.MINECRAFT_SERVER_RUNTIME_LIBRARIES, library);
