@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 
@@ -65,8 +66,8 @@ public class MinecraftPreProcessor {
 		return result;
 	}
 
-	private MethodExceptionData getMethodExceptionData() throws IOException {
-		MethodExceptionData result = new MethodExceptionData();
+	private MethodData getMethodData(ClassInheritanceTree classInheritanceTree) throws IOException {
+		MethodData result = new MethodData(classInheritanceTree);
 		loadLibraries(result);
 		return result;
 	}
@@ -81,7 +82,7 @@ public class MinecraftPreProcessor {
 		System.out.println("LCA of LWJGL Exception and NullPointerException is: "
 				+ classInheritanceTree
 				.getLowestCommonAncestor("org/lwjgl/LWJGLException", "java/lang/NullPointerException"));
-		MethodExceptionData methodExceptionData = getMethodExceptionData();
+		MethodData methodData = getMethodData(classInheritanceTree);
 
 //		System.out.println("Exceptions of data output stream write short: " + methodExceptionData.getMethodExceptions(new MethodIdentifier("java/io/DataOutputStream", "writeShort", "(I)V")));
 
@@ -110,7 +111,7 @@ public class MinecraftPreProcessor {
 							tryCatchEnds.get(label).forEach(currentTryCatchBlocks::remove);
 						}
 					} else if (instruction instanceof MethodInsnNode m) {
-						MethodIdentifier called = MethodIdentifier.fromMethodInsnNode(m);
+						MethodIdentifier called = methodData.getDeclaredMethod(MethodIdentifier.fromMethodInsnNode(m));
 						List<String> caughtExceptions = currentTryCatchBlocks
 								.stream()
 								.map(block -> block.type)
@@ -118,12 +119,15 @@ public class MinecraftPreProcessor {
 								.toList();
 						methodCalls.computeIfAbsent(called, k -> new ArrayList<>())
 								.add(new Pair<>(caller, caughtExceptions));
-						for(String thrownException : methodExceptionData.getMethodExceptions(called)) {
-							boolean uncaught = caughtExceptions
-									.stream()
-									.noneMatch(ex -> classInheritanceTree.isAncestor(thrownException, ex));
-							if(uncaught) {
-								addedExceptionQueue.add(new Pair<>(caller, thrownException));
+						Optional<List<String>> exceptions = methodData.getMethodExceptions(called);
+						if(exceptions.isPresent()) {
+							for (String thrownException : exceptions.get()) {
+								boolean uncaught = caughtExceptions
+										.stream()
+										.noneMatch(ex -> classInheritanceTree.isAncestor(thrownException, ex));
+								if (uncaught) {
+									addedExceptionQueue.add(new Pair<>(caller, thrownException));
+								}
 							}
 						}
 					} else if (instruction instanceof TypeInsnNode typeInsn) {

@@ -69,6 +69,9 @@ public class ClassInheritanceTree implements LibraryConsumer {
 			String javaName = className.replace('/', '.');
 			try {
 				Class c = ClassInheritanceTree.class.getClassLoader().loadClass(javaName);
+				if(c.getSuperclass() == null) {
+					return "java/lang/Object";
+				}
 				String parent = c.getSuperclass().getName();
 				return parent.replace('.', '/');
 			} catch (ClassNotFoundException e) {
