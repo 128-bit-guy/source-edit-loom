@@ -42,6 +42,7 @@ import org.jetbrains.java.vineflower.struct.gen.generics.GenericFieldDescriptor;
 import org.jetbrains.java.vineflower.struct.gen.generics.GenericMethodDescriptor;
 import org.jetbrains.java.vineflower.util.InterpreterUtil;
 import org.jetbrains.java.vineflower.util.Key;
+import org.jetbrains.java.vineflower.util.Pair;
 import org.jetbrains.java.vineflower.util.TextBuffer;
 import org.jetbrains.java.vineflower.util.TextUtil;
 import org.jetbrains.java.vineflower.util.collections.VBStyleCollection;
@@ -477,11 +478,38 @@ public class ClassWriter implements StatementWriter {
 
       // methods
       VBStyleCollection<StructMethod, String> methods = cl.getMethods();
+
+	  // If there are multiple methods with same names and input types, we won't be able to keep all of them.
+	  // So keep only non-synthetic one(s)
+	  Map<Pair<String, String>, List<Integer>> methodSelection = new HashMap<>();
+	  for (int i = 0; i < methods.size(); ++i) {
+		  StructMethod mt = methods.get(i);
+		  String name = mt.getName();
+		  String desc = mt.getDescriptor();
+		  String descWithoutReturnType = desc.substring(0, desc.lastIndexOf(')') + 1);
+		  Pair<String, String> methodId = Pair.of(name, descWithoutReturnType);
+		  methodSelection.computeIfAbsent(methodId, k -> new ArrayList<>()).add(i);
+	  }
+	  Set<Integer> methodsToKeep = new HashSet<>();
+	  for(List<Integer> list : methodSelection.values()) {
+		  List<Integer> nonSynthetic = list
+				  .stream()
+				  .filter(idx -> !methods.get(idx).isSynthetic())
+				  .toList();
+		  if(nonSynthetic.isEmpty()) {
+			  methodsToKeep.addAll(list);
+		  } else {
+			  methodsToKeep.addAll(nonSynthetic);
+		  }
+	  }
+
       for (int i = 0; i < methods.size(); i++) {
         StructMethod mt = methods.get(i);
+
         boolean hide = mt.isSynthetic() && DecompilerContext.getOption(IFernflowerPreferences.REMOVE_SYNTHETIC) ||
                        mt.hasModifier(CodeConstants.ACC_BRIDGE) && DecompilerContext.getOption(IFernflowerPreferences.REMOVE_BRIDGE) ||
-                       wrapper.getHiddenMembers().contains(InterpreterUtil.makeUniqueKey(mt.getName(), mt.getDescriptor()));
+                       wrapper.getHiddenMembers().contains(InterpreterUtil.makeUniqueKey(mt.getName(), mt.getDescriptor())) ||
+				       !methodsToKeep.contains(i);
         if (hide) continue;
 
         TextBuffer methodBuffer = new TextBuffer();

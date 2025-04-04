@@ -46,6 +46,7 @@ public final class VineflowerDecompiler implements LoomInternalDecompiler {
 					IFernflowerPreferences.DECOMPILE_GENERIC_SIGNATURES, "0",
 					IFernflowerPreferences.BYTECODE_SOURCE_MAPPING, "1",
 					IFernflowerPreferences.REMOVE_SYNTHETIC, "0",
+					IFernflowerPreferences.REMOVE_BRIDGE, "0",
 					IFernflowerPreferences.LOG_LEVEL, "trace",
 					IFernflowerPreferences.THREADS, String.valueOf(context.numberOfThreads()),
 					IFernflowerPreferences.INDENT_STRING, "    ",
