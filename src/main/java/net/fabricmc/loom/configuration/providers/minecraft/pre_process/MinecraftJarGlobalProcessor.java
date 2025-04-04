@@ -56,8 +56,7 @@ public class MinecraftJarGlobalProcessor {
 		}
 	}
 
-	public Set<String> getAllInheritedInterfaces(String className) {
-		Set<String> inheritedInterfaces = new HashSet<>();
+	public void addAllInheritedInterfaces(String className, Set<String> inheritedInterfaces) {
 		Queue<String> queue = new ArrayDeque<>();
 		queue.add(className);
 		while (!queue.isEmpty()) {
@@ -68,6 +67,5 @@ public class MinecraftJarGlobalProcessor {
 			queue.addAll(classes.get(current).interfaces);
 		}
 		inheritedInterfaces.remove(className);
-		return inheritedInterfaces;
 	}
 }

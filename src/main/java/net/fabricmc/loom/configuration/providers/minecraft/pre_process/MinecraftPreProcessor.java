@@ -161,6 +161,8 @@ public class MinecraftPreProcessor {
 			Pair<MethodIdentifier, String> pair = addedExceptionQueue.poll();
 			MethodIdentifier methodId = pair.left();
 			String exception = pair.right();
+
+			// Add exception to the method signature, if not already added
 			ClassNode cl = processor.classes.get(methodId.className());
 			if(cl == null) continue;
 			MethodNode method = cl.methods.stream().filter(methodId::checkMethodNode).findAny().orElse(null);
@@ -170,6 +172,8 @@ public class MinecraftPreProcessor {
 					.anyMatch(ex -> classInheritanceTree.isAncestor(exception, ex));
 			if(alreadyDeclared) continue;
 			method.exceptions.add(exception);
+
+			// Propagate exception to all methods which call this
 			List<Pair<MethodIdentifier, List<String>>> calls = methodCalls.get(methodId);
 			if(calls != null) {
 				for(Pair<MethodIdentifier, List<String>> call : calls) {
@@ -181,6 +185,36 @@ public class MinecraftPreProcessor {
 					if(caught) continue;
 					addedExceptionQueue.add(new Pair<>(callerId, exception));
 				}
+			}
+
+			// Propagate exception to all methods from which this method is inherited
+			if(method.name.equals("<init>") || method.name.equals("<clinit>")) continue;
+			Set<String> interfacesToCheck = new HashSet<>();
+			String currentClass = methodId.className();
+			while(
+					processor.classes.containsKey(currentClass)
+							&& (methodId.className().equals(currentClass)
+							|| !methodData.doesMethodExist(methodId.withClassName(currentClass)))
+			) {
+				processor.addAllInheritedInterfaces(currentClass, interfacesToCheck);
+				currentClass = classInheritanceTree.getParent(currentClass, 0);
+			}
+			for(String interfaceName : interfacesToCheck) {
+				MethodIdentifier propagatedId = methodId.withClassName(interfaceName);
+				if(!methodData.doesMethodExist(propagatedId)) continue;
+				addedExceptionQueue.add(new Pair<>(propagatedId, exception));
+			}
+			if(processor.classes.containsKey(currentClass)) {
+				ClassNode otherClass = processor.classes.get(currentClass);
+				MethodNode m = otherClass.methods
+						.stream()
+						.filter(methodId::checkMethodNode)
+						.findAny()
+						.orElse(null);
+				if(m == null) continue;
+				if((m.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) != 0) continue;
+				MethodIdentifier propagatedId = methodId.withClassName(currentClass);
+				addedExceptionQueue.add(new Pair<>(propagatedId, exception));
 			}
 		}
 

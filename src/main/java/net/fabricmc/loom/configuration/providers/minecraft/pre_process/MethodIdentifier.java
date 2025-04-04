@@ -76,4 +76,8 @@ public record MethodIdentifier(String className, String methodName, String metho
 
 		return new MethodIdentifier(methodInsnNode.owner, methodInsnNode.name, methodInsnNode.desc);
 	}
+
+	public MethodIdentifier withClassName(String className) {
+		return new MethodIdentifier(className, methodName, methodDesc);
+	}
 }

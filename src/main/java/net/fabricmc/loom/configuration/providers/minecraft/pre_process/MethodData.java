@@ -1,6 +1,7 @@
 package net.fabricmc.loom.configuration.providers.minecraft.pre_process;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -54,6 +55,9 @@ public class MethodData implements LibraryConsumer {
 
 	private Optional<List<String>> resolveMethodExceptions(MethodIdentifier methodIdentifier) {
 		String javaClassName = methodIdentifier.className().replace('/', '.');
+		if(javaClassName.startsWith("[")) {
+			return Optional.of(new ArrayList<>());
+		}
 		try {
 			Class c = MethodData.class.getClassLoader().loadClass(javaClassName);
 			for (Method m : c.getDeclaredMethods()) {
@@ -101,8 +105,7 @@ public class MethodData implements LibraryConsumer {
 			return Optional.empty();
 		}
 		String parent = classInheritanceTree.getParent(currentClass, 0);
-		MethodIdentifier parentIdentifier =
-				new MethodIdentifier(parent, methodIdentifier.methodName(), methodIdentifier.methodDesc());
+		MethodIdentifier parentIdentifier = methodIdentifier.withClassName(parent);
 		return getDeclaredMethod0(parentIdentifier);
 	}
 
