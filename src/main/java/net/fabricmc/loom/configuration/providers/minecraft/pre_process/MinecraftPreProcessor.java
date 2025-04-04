@@ -122,6 +122,9 @@ public class MinecraftPreProcessor {
 						Optional<List<String>> exceptions = methodData.getMethodExceptions(called);
 						if(exceptions.isPresent()) {
 							for (String thrownException : exceptions.get()) {
+								boolean runtime = classInheritanceTree
+										.isAncestor(thrownException, "java/lang/RuntimeException");
+								if(runtime) continue;
 								boolean uncaught = caughtExceptions
 										.stream()
 										.noneMatch(ex -> classInheritanceTree.isAncestor(thrownException, ex));
