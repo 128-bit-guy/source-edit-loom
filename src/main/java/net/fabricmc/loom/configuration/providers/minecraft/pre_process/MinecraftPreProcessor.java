@@ -23,12 +23,16 @@ import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TryCatchBlockNode;
+import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
+import org.objectweb.asm.tree.analysis.BasicValue;
 
 import net.fabricmc.loom.configuration.ConfigContext;
 import net.fabricmc.loom.configuration.DependencyInfo;
 import net.fabricmc.loom.util.Pair;
 
-import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.tree.analysis.Frame;
 
 public class MinecraftPreProcessor {
 	private final ConfigContext configContext;
@@ -94,6 +98,8 @@ public class MinecraftPreProcessor {
 		for (ClassNode node : processor.classes.values()) {
 			for (MethodNode method : node.methods) {
 				MethodIdentifier caller = MethodIdentifier.fromMethodNode(node.name, method);
+				Frame<BasicValue>[] frames = null;
+				boolean analyzed = false;
 				Map<LabelNode, List<TryCatchBlockNode>> tryCatchBegins = new HashMap<>();
 				Map<LabelNode, List<TryCatchBlockNode>> tryCatchEnds = new HashMap<>();
 				Set<TryCatchBlockNode> currentTryCatchBlocks = new HashSet<>();
@@ -120,11 +126,12 @@ public class MinecraftPreProcessor {
 						methodCalls.computeIfAbsent(called, k -> new ArrayList<>())
 								.add(new Pair<>(caller, caughtExceptions));
 						Optional<List<String>> exceptions = methodData.getMethodExceptions(called);
-						if(exceptions.isPresent()) {
+						if (exceptions.isPresent()) {
 							for (String thrownException : exceptions.get()) {
 								boolean runtime = classInheritanceTree
 										.isAncestor(thrownException, "java/lang/RuntimeException");
-								if(runtime) continue;
+								runtime |= classInheritanceTree.isAncestor(thrownException, "java/lang/Error");
+								if (runtime) continue;
 								boolean uncaught = caughtExceptions
 										.stream()
 										.noneMatch(ex -> classInheritanceTree.isAncestor(thrownException, ex));
@@ -139,19 +146,46 @@ public class MinecraftPreProcessor {
 						if (classInheritanceTree.isAncestor(typeInsn.desc, "java/lang/RuntimeException")) continue;
 						lastNewExceptionNode = typeInsn;
 					} else {
-						if(instruction.getOpcode() != Opcodes.ATHROW) continue;
-						if(lastNewExceptionNode == null) continue;
+						if (instruction.getOpcode() != Opcodes.ATHROW) continue;
+						// Lazily analyze method if it is necessary
+						if(!analyzed) {
+							analyzed = true;
+							Analyzer<BasicValue> analyzer =
+									new Analyzer<>(new ClassInheritanceTreeBasedVerifier(node, classInheritanceTree));
+							try {
+								frames = analyzer.analyze(node.name, method);
+							} catch (AnalyzerException e) {
+								System.err.println("Was unable to analyze method " + caller);
+								frames = null;
+							}
+						}
+						if (frames == null && lastNewExceptionNode == null) continue;
 						List<String> caughtExceptions = currentTryCatchBlocks
 								.stream()
 								.map(block -> block.type)
 								.filter(Predicates.notNull())
 								.toList();
-						// For absolute correctness a stack should be used, but this works in most cases
-						String thrownException = lastNewExceptionNode.desc;
+						String thrownException;
+						if(frames == null) {
+							thrownException = lastNewExceptionNode.desc;
+						} else {
+							Frame<BasicValue> frame = frames[method.instructions.indexOf(instruction)];
+							if(frame.getStackSize() < 1) {
+								if(lastNewExceptionNode == null) continue;
+								thrownException = lastNewExceptionNode.desc;
+							} else {
+								thrownException = frame.getStack(0).getType().getInternalName();
+							}
+						}
+						// Throwable being thrown is usually sign of end of finally block, so it will be skipped.
+						// While not completely correct, it's likely the best that could be done on binary level.
+						if(thrownException.equals("java/lang/Throwable")) continue;
+						if(classInheritanceTree.isAncestor(thrownException, "java/lang/RuntimeException")) continue;
+						if(classInheritanceTree.isAncestor(thrownException, "java/lang/Error")) continue;
 						boolean uncaught = caughtExceptions
 								.stream()
 								.noneMatch(ex -> classInheritanceTree.isAncestor(thrownException, ex));
-						if(uncaught) {
+						if (uncaught) {
 							addedExceptionQueue.add(new Pair<>(caller, thrownException));
 						}
 					}
@@ -167,34 +201,34 @@ public class MinecraftPreProcessor {
 
 			// Add exception to the method signature, if not already added
 			ClassNode cl = processor.classes.get(methodId.className());
-			if(cl == null) continue;
+			if (cl == null) continue;
 			MethodNode method = cl.methods.stream().filter(methodId::checkMethodNode).findAny().orElse(null);
-			if(method == null) continue;
+			if (method == null) continue;
 			boolean alreadyDeclared = method.exceptions
 					.stream()
 					.anyMatch(ex -> classInheritanceTree.isAncestor(exception, ex));
-			if(alreadyDeclared) continue;
+			if (alreadyDeclared) continue;
 			method.exceptions.add(exception);
 
 			// Propagate exception to all methods which call this
 			List<Pair<MethodIdentifier, List<String>>> calls = methodCalls.get(methodId);
-			if(calls != null) {
-				for(Pair<MethodIdentifier, List<String>> call : calls) {
+			if (calls != null) {
+				for (Pair<MethodIdentifier, List<String>> call : calls) {
 					MethodIdentifier callerId = call.left();
 					List<String> caughtExceptions = call.right();
 					boolean caught = caughtExceptions
 							.stream()
 							.anyMatch(ex -> classInheritanceTree.isAncestor(exception, ex));
-					if(caught) continue;
+					if (caught) continue;
 					addedExceptionQueue.add(new Pair<>(callerId, exception));
 				}
 			}
 
 			// Propagate exception to all methods from which this method is inherited
-			if(method.name.equals("<init>") || method.name.equals("<clinit>")) continue;
+			if (method.name.equals("<init>") || method.name.equals("<clinit>")) continue;
 			Set<String> interfacesToCheck = new HashSet<>();
 			String currentClass = methodId.className();
-			while(
+			while (
 					processor.classes.containsKey(currentClass)
 							&& (methodId.className().equals(currentClass)
 							|| !methodData.doesMethodExist(methodId.withClassName(currentClass)))
@@ -202,20 +236,20 @@ public class MinecraftPreProcessor {
 				processor.addAllInheritedInterfaces(currentClass, interfacesToCheck);
 				currentClass = classInheritanceTree.getParent(currentClass, 0);
 			}
-			for(String interfaceName : interfacesToCheck) {
+			for (String interfaceName : interfacesToCheck) {
 				MethodIdentifier propagatedId = methodId.withClassName(interfaceName);
-				if(!methodData.doesMethodExist(propagatedId)) continue;
+				if (!methodData.doesMethodExist(propagatedId)) continue;
 				addedExceptionQueue.add(new Pair<>(propagatedId, exception));
 			}
-			if(processor.classes.containsKey(currentClass)) {
+			if (processor.classes.containsKey(currentClass)) {
 				ClassNode otherClass = processor.classes.get(currentClass);
 				MethodNode m = otherClass.methods
 						.stream()
 						.filter(methodId::checkMethodNode)
 						.findAny()
 						.orElse(null);
-				if(m == null) continue;
-				if((m.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) != 0) continue;
+				if (m == null) continue;
+				if ((m.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) != 0) continue;
 				MethodIdentifier propagatedId = methodId.withClassName(currentClass);
 				addedExceptionQueue.add(new Pair<>(propagatedId, exception));
 			}

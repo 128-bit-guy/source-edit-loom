@@ -22,6 +22,7 @@ public class ClassInheritanceTree implements LibraryConsumer {
 	private final int levels;
 	private final List<Map<String, String>> parents;
 	private final Map<String, Integer> heights;
+	private final Map<String, Boolean> isInterface;
 
 	/**
 	 * Creates {@link ClassInheritanceTree} with specified number of levels. For the structure to properly function
@@ -37,6 +38,7 @@ public class ClassInheritanceTree implements LibraryConsumer {
 		heights = new HashMap<>();
 		parents.get(0).put("java/lang/Object", "java/lang/Object");
 		heights.put("java/lang/Object", 0);
+		isInterface = new HashMap<>();
 	}
 
 	/**
@@ -57,7 +59,9 @@ public class ClassInheritanceTree implements LibraryConsumer {
 				ClassReader classReader = new ClassReader(Files.readAllBytes(f));
 				ClassNode classNode = new ClassNode();
 				classReader.accept(classNode, 0);
-				if ((classNode.access & Opcodes.ACC_INTERFACE) != 0) continue;
+				boolean itf = (classNode.access & Opcodes.ACC_INTERFACE) != 0;
+				isInterface.put(classNode.name, itf);
+				if (itf) continue;
 				parents.get(0).put(classNode.name, classNode.superName);
 			}
 		}
@@ -162,5 +166,29 @@ public class ClassInheritanceTree implements LibraryConsumer {
 	public boolean isAncestor(String className, String ancestor) {
 		String ancestorOfHeight = getAncestorOfHeight(className, getHeight(ancestor));
 		return ancestorOfHeight.equals(ancestor);
+	}
+
+	private boolean resolveIsInterface(String className) {
+		String javaName = className.replace('/', '.');
+		try {
+			Class c = ClassInheritanceTree.class.getClassLoader().loadClass(javaName);
+			return c.isInterface();
+		} catch (ClassNotFoundException e) {
+			System.err.println("Failed to resolve parent for class " + javaName);
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	/**
+	 * Checks whether {@code className} is interface
+	 */
+	public boolean isInterface(String className) {
+		if(isInterface.containsKey(className)) {
+			return isInterface.get(className);
+		}
+		boolean itf = resolveIsInterface(className);
+		isInterface.put(className, itf);
+		return itf;
 	}
 }
