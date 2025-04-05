@@ -36,6 +36,8 @@ import java.util.function.Function;
 
 import javax.inject.Inject;
 
+import net.fabricmc.loom.LoomRepositoryPlugin;
+
 import org.gradle.api.Named;
 import org.gradle.api.Project;
 import org.gradle.api.provider.Property;
@@ -333,6 +335,13 @@ public class RunConfigSettings implements Named {
 	public void client() {
 		environment("client");
 		defaultMainClass(Constants.Knot.KNOT_CLIENT);
+		String jarPath = LoomGradleExtension.get(project)
+				.getNamedMinecraftProvider()
+				.getMinecraftJars()
+				.get(0)
+				.getPath()
+				.toString();
+		property("source-edit-loom.preDecompJar", jarPath);
 
 		if (Platform.CURRENT.isRaspberryPi()) {
 			getProject().getLogger().info("Raspberry Pi detected, setting MESA_GL_VERSION_OVERRIDE=4.3");
@@ -347,6 +356,13 @@ public class RunConfigSettings implements Named {
 		programArg("nogui");
 		environment("server");
 		defaultMainClass(Constants.Knot.KNOT_SERVER);
+		String jarPath = LoomGradleExtension.get(project)
+				.getNamedMinecraftProvider()
+				.getMinecraftJars()
+				.get(0)
+				.getPath()
+				.toString();
+		property("source-edit-loom.preDecompJar", jarPath);
 	}
 
 	/**

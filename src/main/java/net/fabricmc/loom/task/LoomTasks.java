@@ -150,11 +150,11 @@ public abstract class LoomTasks implements Runnable {
 			});
 		});
 
-		extension.getRunConfigs().create("client", RunConfigSettings::client);
-		extension.getRunConfigs().create("server", RunConfigSettings::server);
-
 		// Remove the client or server run config when not required. Done by name to not remove any possible custom run configs
 		GradleUtils.afterSuccessfulEvaluation(getProject(), () -> {
+			extension.getRunConfigs().create("client", RunConfigSettings::client);
+			extension.getRunConfigs().create("server", RunConfigSettings::server);
+
 			String taskName;
 
 			boolean serverOnly = extension.getMinecraftJarConfiguration().get() == MinecraftJarConfiguration.SERVER_ONLY;

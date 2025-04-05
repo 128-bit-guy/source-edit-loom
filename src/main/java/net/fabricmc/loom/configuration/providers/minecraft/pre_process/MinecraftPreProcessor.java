@@ -78,7 +78,7 @@ public class MinecraftPreProcessor {
 
 	public void process() throws IOException {
 		if (Files.exists(outputPath)) {
-			Files.delete(outputPath);
+			return;
 		}
 		System.out.println("Preprocessing " + inputPath + " to " + outputPath);
 		Files.copy(inputPath, outputPath);
