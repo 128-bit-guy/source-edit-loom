@@ -108,7 +108,11 @@ public abstract class AbstractRemapJarTask extends Jar {
 	@Inject
 	public AbstractRemapJarTask() {
 		getSourceNamespace().convention(MappingsNamespace.NAMED.toString()).finalizeValueOnRead();
-		getTargetNamespace().convention(MappingsNamespace.INTERMEDIARY.toString()).finalizeValueOnRead();
+		if(this instanceof RemapSourcesJarTask) {
+			getTargetNamespace().convention(MappingsNamespace.INTERMEDIARY.toString()).finalizeValueOnRead();
+		} else {
+			getTargetNamespace().convention(MappingsNamespace.OFFICIAL.toString()).finalizeValueOnRead();
+		}
 		getIncludesClientOnlyClasses().convention(false).finalizeValueOnRead();
 		getJarType().finalizeValueOnRead();
 
